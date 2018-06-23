@@ -18,8 +18,7 @@ func init() {
 //	num is the partition numbers for the topic
 //
 func getPartition(v string, num int) uint32 {
-
-	if num == 1 {
+	if num <= 1 {
 		return 0
 	}
 	hashHandle.Write([]byte(v))
@@ -38,8 +37,8 @@ func main() {
 		TopicDetails: make(map[string]*sarama.TopicDetail),
 	}
 
-	topic.TopicDetails["chat"] = &sarama.TopicDetail{
-		NumPartitions:     3,
+	topic.TopicDetails["chat_x"] = &sarama.TopicDetail{
+		NumPartitions:     64,
 		ReplicationFactor: 1,
 	}
 
@@ -63,31 +62,32 @@ func main() {
 	}
 
 	var num int
-	if p, err := client.Partitions("chat"); err == nil {
+	if p, err := client.Partitions("chat_x"); err == nil {
 		num = len(p)
 		for _, id := range p {
 			fmt.Println(id)
 		}
 	}
-
 	cfg.Producer.Return.Successes = true
-
 	producer, _ := sarama.NewAsyncProducer([]string{"localhost:9092"}, cfg)
-	for i := 1; i < 1000000; i++ {
-		topic := "chat"
+
+	for i := 999; i < 1999; i++ {
+		topic := "chat_x"
 		part := int32(getPartition(strconv.Itoa(i), num))
 		fmt.Println(part)
-
-		s := "hello:" + strconv.Itoa(i)
-		producer.Input() <- &sarama.ProducerMessage{
-			Topic:     topic,
-			Partition: part,
-			Value:     sarama.StringEncoder([]byte(s)),
-		}
-		select {
-		case <-producer.Successes():
-		case err := <-producer.Errors():
-			fmt.Println("failure:", err.Error())
+		for seq := 0; seq < 5; seq++ {
+			s := "hello:" + strconv.Itoa(seq)
+			producer.Input() <- &sarama.ProducerMessage{
+				Topic:     topic,
+				Partition: part,
+				Key:       sarama.StringEncoder([]byte(strconv.Itoa(i))),
+				Value:     sarama.StringEncoder([]byte(s)),
+			}
+			select {
+			case <-producer.Successes():
+			case err := <-producer.Errors():
+				fmt.Println("failure:", err.Error())
+			}
 		}
 	}
 }
